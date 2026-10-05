@@ -5,6 +5,9 @@ and result synthesis across Earth Observation (EO) satellite intelligence tasks 
 Standardized outputs from specialist models seamlessly synchronize with state.py trackers.
 """
 
+import sys
+sys.setrecursionlimit(10000)
+
 import os
 import uuid
 import re

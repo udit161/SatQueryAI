@@ -26,6 +26,9 @@ Primary TypedDicts
 - SpatialMaskEntry   : Lightweight TypedDict for a change / segmentation mask reference.
 """
 
+import sys
+sys.setrecursionlimit(10000)
+
 from enum import Enum
 from typing import TypedDict, List, Dict, Optional, Any, Union, Annotated, Literal
 import operator
@@ -1428,8 +1431,10 @@ class AgentStateModel(BaseModel):
     updated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
     @staticmethod
-    def _to_dict_deep(obj: Any) -> Any:
-        """Deep dictionary converter supporting Pydantic models, dicts, enums, and lists."""
+    def _to_dict_deep(obj: Any, depth: int = 0) -> Any:
+        """Deep dictionary converter supporting Pydantic models, dicts, enums, and lists with recursion guard."""
+        if depth > 15:
+            return str(obj)
         if obj is None:
             return None
         if isinstance(obj, Enum):
@@ -1437,15 +1442,27 @@ class AgentStateModel(BaseModel):
         if isinstance(obj, (int, float, str, bool)):
             return obj
         if isinstance(obj, list):
-            return [AgentStateModel._to_dict_deep(item) for item in obj]
+            return [AgentStateModel._to_dict_deep(item, depth + 1) for item in obj]
         if isinstance(obj, dict):
-            return {k: AgentStateModel._to_dict_deep(v) for k, v in obj.items()}
+            return {str(k): AgentStateModel._to_dict_deep(v, depth + 1) for k, v in obj.items()}
         if hasattr(obj, 'model_dump') and callable(obj.model_dump):
-            raw = obj.model_dump()
-            return AgentStateModel._to_dict_deep(raw)
+            try:
+                raw = obj.model_dump()
+                return AgentStateModel._to_dict_deep(raw, depth + 1)
+            except Exception:
+                return str(obj)
+        if hasattr(obj, 'dict') and callable(obj.dict):
+            try:
+                raw = obj.dict()
+                return AgentStateModel._to_dict_deep(raw, depth + 1)
+            except Exception:
+                return str(obj)
         if hasattr(obj, '__dict__'):
-            return {k: AgentStateModel._to_dict_deep(v) for k, v in obj.__dict__.items()}
-        return obj
+            try:
+                return {str(k): AgentStateModel._to_dict_deep(v, depth + 1) for k, v in obj.__dict__.items() if not str(k).startswith('_')}
+            except Exception:
+                return str(obj)
+        return str(obj)
 
     def to_graph_state(self) -> AgentState:
         """Convert Pydantic model into a LangGraph-compatible TypedDict state."""
