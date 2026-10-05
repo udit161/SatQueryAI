@@ -13,7 +13,7 @@ import asyncio
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 from pydantic import BaseModel
-from .persistence import (
+from persistence import (
     init_persistence,
     create_query,
     update_query,
@@ -23,7 +23,7 @@ from .persistence import (
     save_artifact,
     get_artifacts,
 )
-from .utils.report import generate_audit_report
+from utils.report import generate_audit_report
 try:
     from fastapi import (
         FastAPI,

@@ -34,7 +34,7 @@ export function SignInForm({ isActive, onSuccess }) {
       role="tabpanel"
       aria-hidden={!isActive}
     >
-      <form className="auth-form" onSubmit={handleSubmit} noValidate>
+      <form className="auth-form" onSubmit={handleSubmit}>
         <div className="form-group">
           <label className="form-label" htmlFor="signinEmail">{t.orbitalEmail}</label>
           <div className="input-wrapper">
