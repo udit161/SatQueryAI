@@ -491,6 +491,11 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
     }
   }, []);
 
+  // Proactively ping health endpoint on mount to wake up Render backend cold-start
+  useEffect(() => {
+    fetch(`${AI_BASE_URL}/health`).catch(() => {});
+  }, []);
+
   const appendMessage = useCallback((msg) => {
     setMessages(prev => [...prev, msg]);
   }, []);
@@ -498,7 +503,7 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
   /** Poll /api/v1/trace/{job_id} until done or failed */
   const pollJobResult = useCallback((jobId, onResult) => {
     let attempts = 0;
-    const MAX = 120; // 60 seconds max (handles Render free tier cold starts)
+    const MAX = 360; // 180 seconds max (handles Render free tier cold starts and deep LLM inference)
     let timerId = null;
 
     const stop = () => {
@@ -531,7 +536,7 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
   }, []);
 
   /** Fetch with a timeout (ms). Throws if request exceeds the limit. */
-  const fetchWithTimeout = useCallback(async (url, options = {}, timeoutMs = 90000) => {
+  const fetchWithTimeout = useCallback(async (url, options = {}, timeoutMs = 120000) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -540,7 +545,10 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
       return res;
     } catch (err) {
       clearTimeout(timer);
-      if (err.name === 'AbortError') throw new Error('Request timed out after 90 seconds. The backend may still be waking up — please try again.');
+      if (err.name === 'AbortError') {
+        const seconds = Math.round(timeoutMs / 1000);
+        throw new Error(`Request timed out after ${seconds} seconds. The backend may still be waking up — please try again.`);
+      }
       throw err;
     }
   }, []);
@@ -588,7 +596,7 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
         const res = await fetchWithTimeout(`${AI_BASE_URL}/api/v1/query-with-image`, {
           method: 'POST',
           body: formData,
-        }, 120000); // 2 min timeout for image inference
+        }, 180000); // 3 min timeout for image inference
         if (!res.ok) {
           const errBody = await res.json().catch(() => null);
           throw new Error(parseApiError(errBody, `HTTP ${res.status}`));
@@ -606,7 +614,7 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
             user_id: 'user_' + Math.random().toString(36).substr(2, 6),
             session_id: 'sess_' + Date.now(),
           }),
-        }, 30000); // 30s timeout to accept job
+        }, 120000); // 2 min timeout to accept job (accommodates Render free tier cold starts)
         if (!res.ok) {
           const errBody = await res.json().catch(() => null);
           throw new Error(parseApiError(errBody, `HTTP ${res.status}`));
