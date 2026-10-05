@@ -779,6 +779,7 @@ class StrictVQAInput(BaseModel):
 _vision_vqa_model = VisionVQAModel() if VisionVQAModel is not None else None
 if _vision_vqa_model is None:
     try:
+        raise Exception("Simulated Render Error")
         from specialist_models.vision_vqa import VisionVQAModel
         _vision_vqa_model = VisionVQAModel()
     except Exception:
