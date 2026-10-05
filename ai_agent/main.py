@@ -83,8 +83,6 @@ except ImportError:
         return default
 
 from .agent_core.orchestrator import Orchestrator
-from .agent37.controller import Agent37Controller
-from .agent37.schemas import Agent37QueryRequest
 from .utils.geospatial import (
     inspect_raster,
     validate_image_pair_alignment,
@@ -145,7 +143,6 @@ app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 # Initialize single orchestrator instance
 orchestrator = Orchestrator()
-agent37_controller = Agent37Controller(use_mock=True)
 
 # In-memory execution trace store.
 # This will later be replaced/extended with persistent database storage.
@@ -177,28 +174,18 @@ def run_query_job(
         message="Background orchestration started.",
     )
 
-        agent37_req = Agent37QueryRequest(
+        model = AgentStateModel(
+            raw_query=q,
             query=q,
             geo_context=geo,
+            modalities=mod,
+            user_id=uid,
             session_id=sid,
-            user_id=uid
         )
-        
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-        agent37_result = loop.run_until_complete(agent37_controller.process_query(agent37_req))
 
-        result_state = {
-            "final_response": agent37_result.final_response,
-            "artifacts": [], 
-            "intermediate_outputs": {},
-            "tool_outputs": {}
-        }
+        initial_state = model.to_graph_state()
+
+        result_state = orchestrator.run(q, initial_state)
 
         JOB_TRACES[job_id]["status"] = "completed"
         JOB_TRACES[job_id]["completed_at"] = (
@@ -674,79 +661,6 @@ def orchestrate_query(
         "message": "Query accepted and processing started.",
         "trace_url": f"/api/v1/trace/{job_id}",
     }
-
-# ============================================================================
-# Agent37 Controller Endpoints
-# ============================================================================
-
-@app.post("/api/v1/agent37/query")
-async def agent37_submit_query(payload: QueryRequest):
-    q = getattr(payload, "query", "")
-    if not q.strip():
-        raise HTTPException(status_code=400, detail="Query cannot be empty")
-
-    agent37_req = Agent37QueryRequest(
-        query=q,
-        geo_context=getattr(payload, "geo_context", {}),
-        session_id=getattr(payload, "session_id", None),
-        user_id=getattr(payload, "user_id", None)
-    )
-
-    # Process async
-    result = await agent37_controller.process_query(agent37_req)
-    
-    # Store in JOB_TRACES for compatibility
-    JOB_TRACES[result.job_id] = {
-        "job_id": result.job_id,
-        "status": result.status.value,
-        "result": result.model_dump(),
-        "query": q
-    }
-    
-    return result.model_dump()
-
-@app.get("/api/v1/agent37/job/{job_id}")
-def agent37_get_job(job_id: str):
-    trace = agent37_controller.audit.get_trace(job_id)
-    if not trace:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return trace.model_dump()
-
-from fastapi.responses import StreamingResponse
-import json
-@app.get("/api/v1/agent37/stream/{job_id}")
-async def stream_job_events(job_id: str):
-    async def event_stream():
-        trace = agent37_controller.audit.get_trace(job_id)
-        if not trace:
-            yield f"data: {json.dumps({'error': 'Job not found'})}\n\n"
-            return
-
-        seen_events = 0
-        waited = 0
-
-        while waited < 120:
-            current_events = trace.events[seen_events:]
-            for event in current_events:
-                yield f"data: {json.dumps(event.model_dump())}\n\n"
-                seen_events += 1
-
-            job = agent37_controller.audit.get_job(job_id)
-            if job and job.get("status") in ("completed", "failed"):
-                yield f"data: {json.dumps({'type': 'done', 'status': job['status']})}\n\n"
-                break
-
-            await asyncio.sleep(0.5)
-            waited += 0.5
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        },
-    )
 @app.post("/api/v1/upload")
 async def upload_standalone_file(file: UploadFile = File(...)):
     """
