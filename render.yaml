@@ -14,7 +14,9 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        sync: false   # Set to your satquery-api-gateway Render URL after deploy
+        value: https://satquery-api-gateway.onrender.com
+      - key: VITE_AI_URL
+        value: https://satquery-ai-agent.onrender.com
 
   # ── 2. Node.js API Gateway ──────────────────────────────────────────────────
   - type: web

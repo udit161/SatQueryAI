@@ -24,7 +24,11 @@ import { useT } from '../context/LanguageContext';
 import { translateText } from '../utils/translate';
 import './LiquidMetalChatUI.css';
 
-const AI_BASE_URL = import.meta.env.VITE_AI_URL || 'http://localhost:8000';
+const AI_BASE_URL =
+  import.meta.env.VITE_AI_URL ||
+  import.meta.env.VITE_AI_AGENT_URL ||
+  import.meta.env.VITE_API_URL ||
+  'https://satquery-ai-agent.onrender.com';
 
 /** Convert base64 Data URL to File object */
 function dataURLtoFile(dataurl, filename) {
@@ -52,9 +56,11 @@ function formatErrorMessage(msg) {
   if (
     msg === 'Failed to fetch' ||
     msg.toLowerCase().includes('failed to fetch') ||
-    msg.toLowerCase().includes('networkerror')
+    msg.toLowerCase().includes('networkerror') ||
+    msg.toLowerCase().includes('load failed') ||
+    msg.toLowerCase().includes('network request failed')
   ) {
-    return `Cannot connect to AI Agent backend (${AI_BASE_URL}). Please verify that the FastAPI backend service is running on port 8000.`;
+    return `Cannot connect to AI Agent backend (${AI_BASE_URL}). The backend may be sleeping (free tier) — please wait 30s and try again.`;
   }
   return msg;
 }
@@ -492,7 +498,7 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
   /** Poll /api/v1/trace/{job_id} until done or failed */
   const pollJobResult = useCallback((jobId, onResult) => {
     let attempts = 0;
-    const MAX = 60; // 30 seconds max
+    const MAX = 120; // 60 seconds max (handles Render free tier cold starts)
     let timerId = null;
 
     const stop = () => {
@@ -522,6 +528,21 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
     }, 500);
 
     return stop;
+  }, []);
+
+  /** Fetch with a timeout (ms). Throws if request exceeds the limit. */
+  const fetchWithTimeout = useCallback(async (url, options = {}, timeoutMs = 90000) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      clearTimeout(timer);
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      if (err.name === 'AbortError') throw new Error('Request timed out after 90 seconds. The backend may still be waking up — please try again.');
+      throw err;
+    }
   }, []);
 
   /** Run the AI query — uses query-with-image if files present, else async query + poll */
@@ -564,10 +585,10 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
         const formData = new FormData();
         formData.append('query', query || 'Analyze satellite imagery and describe findings.');
         realFiles.forEach(f => formData.append('files', f));
-        const res = await fetch(`${AI_BASE_URL}/api/v1/query-with-image`, {
+        const res = await fetchWithTimeout(`${AI_BASE_URL}/api/v1/query-with-image`, {
           method: 'POST',
           body: formData,
-        });
+        }, 120000); // 2 min timeout for image inference
         if (!res.ok) {
           const errBody = await res.json().catch(() => null);
           throw new Error(parseApiError(errBody, `HTTP ${res.status}`));
@@ -577,7 +598,7 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
         return data;
       } else {
         // Async text query → poll trace
-        const res = await fetch(`${AI_BASE_URL}/api/v1/query`, {
+        const res = await fetchWithTimeout(`${AI_BASE_URL}/api/v1/query`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -585,7 +606,7 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
             user_id: 'user_' + Math.random().toString(36).substr(2, 6),
             session_id: 'sess_' + Date.now(),
           }),
-        });
+        }, 30000); // 30s timeout to accept job
         if (!res.ok) {
           const errBody = await res.json().catch(() => null);
           throw new Error(parseApiError(errBody, `HTTP ${res.status}`));
@@ -609,7 +630,7 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
     } catch (err) {
       throw err;
     }
-  }, [pollJobResult]);
+  }, [pollJobResult, fetchWithTimeout]);
 
   /** Initial query run when component mounts */
   const runInitialQuery = useCallback(async (query, fileAttachments, reqId) => {
