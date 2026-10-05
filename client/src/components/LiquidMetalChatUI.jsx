@@ -642,17 +642,10 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
 
   /** Initial query run when component mounts */
   const runInitialQuery = useCallback(async (query, fileAttachments, reqId) => {
-    const initPreviews = (fileAttachments || [])
-      .filter(f => {
-        const file = f.fileObj || f;
-        return file instanceof File && file.type?.startsWith('image/');
-      })
-      .map(f => {
-        const file = f.fileObj || f;
-        return { name: file.name, url: URL.createObjectURL(file) };
-      });
-
-    setMessages([{ id: 'user-init', sender: 'user', text: query, filePreviews: initPreviews }]);
+    // NOTE: Do NOT attach filePreviews to the initial message — the right-side
+    // image card already displays them via allUploadedPreviews. Attaching here
+    // caused the "one upload shows two images" duplication bug.
+    setMessages([{ id: 'user-init', sender: 'user', text: query }]);
     setIsLoading(true);
     try {
       const result = await runQuery(query, fileAttachments);
