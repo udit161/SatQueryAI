@@ -5,6 +5,12 @@ image uploads, cross-modal analysis, bi-temporal change detection,
 and user authentication (Signup, Login, JWT verification).
 """
 
+import sys
+# Increase recursion limit early — Render free tier has a restricted default stack.
+# langchain_core's import chain (langchain_core → langsmith → httpx2 → importlib.metadata)
+# can exceed the default 1000 limit during cold-start module loading.
+sys.setrecursionlimit(5000)
+
 import os
 import uuid
 import json
