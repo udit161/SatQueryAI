@@ -920,34 +920,7 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
                       <p style={{ margin: 0, whiteSpace: 'pre-wrap', lineHeight: '1.6', color: msg.isError ? '#f87171' : undefined }}>
                         {msg.displayText ?? msg.text}
                       </p>
-                      {/* Show image previews on the first user message */}
-                      {msg.sender === 'user' && msg.id === 'user-init' && initImagePreviews.length > 0 && (
-                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
-                          {initImagePreviews.map((img, i) => (
-                            <div key={i} style={{ position: 'relative' }}>
-                              <img
-                                src={img.url}
-                                alt={img.name}
-                                title={img.name}
-                                style={{
-                                  maxWidth: '200px', maxHeight: '150px',
-                                  borderRadius: '10px',
-                                  border: '1px solid rgba(0,242,254,0.4)',
-                                  objectFit: 'cover',
-                                  display: 'block'
-                                }}
-                              />
-                              <span style={{
-                                display: 'block', fontSize: '0.7rem',
-                                color: '#94a3b8', marginTop: '4px',
-                                maxWidth: '200px', overflow: 'hidden',
-                                textOverflow: 'ellipsis', whiteSpace: 'nowrap'
-                              }}>{img.name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {/* Show inline previews for follow-up file messages */}
+                      {/* Show image previews for user messages */}
                       {msg.sender === 'user' && msg.filePreviews && msg.filePreviews.length > 0 && (
                         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
                           {msg.filePreviews.map((img, i) => (
@@ -955,7 +928,7 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
                               <img src={img.url} alt={img.name} title={img.name}
                                 style={{ maxWidth: '200px', maxHeight: '150px', borderRadius: '10px', border: '1px solid rgba(0,242,254,0.4)', objectFit: 'cover' }}
                               />
-                              <span style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8', marginTop: '4px' }}>{img.name}</span>
+                              <span style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8', marginTop: '4px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{img.name}</span>
                             </div>
                           ))}
                         </div>
