@@ -642,10 +642,17 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
 
   /** Initial query run when component mounts */
   const runInitialQuery = useCallback(async (query, fileAttachments, reqId) => {
-    // NOTE: Do NOT attach filePreviews to the initial message — the right-side
-    // image card already displays them via allUploadedPreviews. Attaching here
-    // caused the "one upload shows two images" duplication bug.
-    setMessages([{ id: 'user-init', sender: 'user', text: query }]);
+    const initPreviews = (fileAttachments || [])
+      .filter(f => {
+        const file = f.fileObj || f;
+        return file instanceof File && file.type?.startsWith('image/');
+      })
+      .map(f => {
+        const file = f.fileObj || f;
+        return { name: file.name, url: URL.createObjectURL(file) };
+      });
+
+    setMessages([{ id: 'user-init', sender: 'user', text: query, filePreviews: initPreviews }]);
     setIsLoading(true);
     try {
       const result = await runQuery(query, fileAttachments);
@@ -1127,7 +1134,8 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
         {/* ── Right Summary Column ── */}
         <div className="right-summary-column">
 
-          {/* ── Uploaded Image Card (always shown, above follow-up bar) ── */}
+          {/* ── Uploaded Image Card (hidden when Image tab is active to avoid duplication) ── */}
+          {activeTab !== 'image' && (
           <LiquidGlassCard className="right-image-card">
 
 
@@ -1195,6 +1203,7 @@ export function LiquidMetalChatUI({ queryText, attachments = [], onResetQuery })
               )}
             </div>
           </LiquidGlassCard>
+          )}
 
           {/* ── Follow-up Query Bar ── */}
           <LiquidGlassCard pill className="summary-followup-card">
